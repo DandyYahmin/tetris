@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Tetris Game</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.16/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+    </style>
+</head>
+<body class="bg-black">
+    <div id="tetris" class="mx-auto mt-4 max-w-md grid grid-cols-2 gap-60">
+        <canvas id="gameCanvas" width="300" height="600" class="border-4 border-white col-span-1"></canvas>
+        <div class="col-span-1">
+            <button id="startButton" class="block mx-auto mt-4 px-4 py-2 bg-blue-500 text-white rounded">Start Game</button>
+            <button id="restartButton" class="hidden block mx-auto mt-4 px-4 py-2 bg-red-500 text-white rounded">Restart Game</button>
+            <p id="gameOver" class="text-center text-4xl font-bold text-red-500 mt-8" style="display: none;">Game Over</p>
+            <p id="score" class="text-white text-center text-2xl font-bold mt-4">Score: 0</p>
+            <p id="level" class="text-white text-center text-2xl font-bold mt-4">Level: 1</p>
+        </div>
+    </div>
+
+    <script>
+        const ROWS = 20;
+        const COLS = 10;
+        const BLOCK_SIZE = 30;
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const board = [];
+
+        for (let r = 0; r < ROWS; r++) {
+            board[r] = [];
+            for (let c = 0; c < COLS; c++) {
+                board[r][c] = 'black';
+            }
+        }
+
+        const tetrominos = {
+            I: [
+                [1, 1, 1, 1],
+            ],
+            J: [
+                [1, 0, 0],
+                [1, 1, 1],
+            ],
+            L: [
+                [0, 0, 1],
+                [1, 1, 1],
+            ],
+            O: [
+                [1, 1],
+                [1, 1],
+            ],
+            S: [
+                [0, 1, 1],
+                [1, 1, 0],
+            ],
+            T: [
+                [0, 1, 0],
+                [1, 1, 1],
+            ],
+            Z: [
+                [1, 1, 0],
+                [0, 1, 1],
+            ],
+        };
+
+        const pieceColor = {
+            I: "yellow",
+            J: "blue",
+            L: "red",
+            O: "purple",
+            S: "pink",
+            T: "green",
+            Z: "brown"
+        }
+
+        function drawSquare(x, y, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+            ctx.strokeStyle = "white";
+            ctx.strokeRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+        }
+
+        function drawBoard() {
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    drawSquare(c, r, board[r][c]);
+                }
+            }
+        }
+
+        function rotateMatrix(matrix) {
+            const rotated = matrix[0].map((_, i) =>
+                matrix.map(row => row[i]).reverse()
+            );
+            return rotated;
+        }
+        var currentColor;
+        function randomTetromino() {
+            const tetrominoKeys = Object.keys(tetrominos);
+            const randomKey = tetrominoKeys[Math.floor(Math.random() * tetrominoKeys.length)];
+            currentColor = pieceColor[randomKey];
+            return tetrominos[randomKey];
+        }
+
+        let currentPiece = randomTetromino();
+        let currentX = 3;
+        let currentY = 0;
+
+        function drawPiece() {
+
+            for (let r = 0; r < currentPiece.length; r++) {
+                for (let c = 0; c < currentPiece[r].length; c++) {
+                    if (currentPiece[r][c]) {
+                        drawSquare(currentX + c, currentY + r, currentColor);
+                    }
+                }
+            }
+        }
+
+        function draw() {
+            drawBoard();
+            drawPiece();
+        }
+
+        function clearPiece() {
+            for (let r = 0; r < currentPiece.length; r++) {
+                for (let c = 0; c < currentPiece[r].length; c++) {
+                    if (currentPiece[r][c]) {
+                        board[currentY + r][currentX + c] = 'black';
+                    }
+                }
+            }
+        }
+
+        function collide(x, y, piece) {
+            for (let r = 0; r < piece.length; r++) {
+                for (let c = 0; c < piece[r].length; c++) {
+                    if (!piece[r][c]) continue;
+                    const newX = currentX + c + x;
+                    const newY = currentY + r + y;
+                    if (newX < 0 || newX >= COLS || newY >= ROWS) {
+                        return true;
+                    }
+                    if (newY < 0) continue;
+                    if (board[newY][newX] !== 'black') {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function mergePiece() {
+            for (let r = 0; r < currentPiece.length; r++) {
+                for (let c = 0; c < currentPiece[r].length; c++) {
+                    if (currentPiece[r][c]) {
+                        board[currentY + r][currentX + c] = currentColor;
+                    }
+                }
+            }
+        }
+
+        function movePiece(x, y) {
+            if (!isGameOver && !collide(x, y, currentPiece)) {
+                clearPiece();
+                currentX += x;
+                currentY += y;
+                draw();
+            }
+            if (!isGameOver && collide(0, 1, currentPiece)) {
+                mergePiece();
+                currentPiece = randomTetromino();
+                currentX = 3;
+                currentY = 0;
+                if (collide(0, 0, currentPiece)) {
+                    gameOver();
+                }
+            }
+        }
+
+        function rotate() {
+            const rotatedPiece = rotateMatrix(currentPiece);
+            if (!collide(0, 0, rotatedPiece)) {
+                clearPiece();
+                currentPiece = rotatedPiece;
+                draw();
+            }
+        }
+
+        function keyListener(event) {
+            switch (event.key) {
+                case 'ArrowLeft':
+                    movePiece(-1, 0);
+                    break;
+                case 'ArrowRight':
+                    movePiece(1, 0);
+                    break;
+                case 'ArrowDown':
+                    movePiece(0, 1);
+                    break;
+                case 'ArrowUp':
+                    rotate();
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        function gameLoop() {
+            movePiece(0, 1);
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        document.addEventListener('keydown', keyListener);
+        let score = 0;
+        const scoreElement = document.getElementById('score');
+        let level = 1;
+        let speed = 1000;
+
+        function clearRows() {
+            for (let r = ROWS - 1; r >= 0; r--) {
+                if (board[r].every(cell => cell !== 'black')) {
+                    board.splice(r, 1);
+                    board.unshift(Array(COLS).fill('black'));
+                    score += 100 * level;
+                    scoreElement.textContent = `Score: ${score}`;
+                }
+            }
+        }
+
+        function increaseLevel() {
+            level = Math.floor(score / 1000) + 1;
+            speed = 1000 - (level * 100);
+        }
+
+        function updateLevel() {
+            const levelElement = document.getElementById('level');
+            levelElement.textContent = `Level: ${level}`;
+        }
+
+        function gameLoop() {
+            movePiece(0, 1);
+            clearRows();
+            increaseLevel();
+            draw();
+            updateLevel();
+            setTimeout(() => {
+                requestAnimationFrame(gameLoop);
+            }, speed);
+        }
+
+        let isGameOver = false;
+
+        function restartGame() {
+            location.reload();
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            const gameOverElement = document.getElementById('gameOver');
+            gameOverElement.style.display = 'block';
+            gameOverElement.textContent = 'Game Over';
+
+            const restartButton = document.getElementById('restartButton');
+            restartButton.style.display = "block";
+            restartButton.addEventListener('click', () => {
+                location.reload();
+            });
+        }
+
+        document.addEventListener('keydown', keyListener);
+
+        const startButton = document.getElementById('startButton');
+
+        startButton.addEventListener('click', () => {
+            startButton.style.display = 'none';
+            gameLoop();
+        });
+    </script>
+</body>
+</html>
